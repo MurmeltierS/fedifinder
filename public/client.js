@@ -1,7 +1,73 @@
 const socket = io();
+Vue.use(VueSocketIOExt, socket);
 let accounts = {};
 let user_lists = [];
 let checked_accounts = 0;
+
+var app = new Vue({
+  el: "#vue",
+  data: {
+    checked_accounts: 0,
+    accounts: {},
+    user_lists: [],
+  },
+  computed: {
+    instance: function () {
+      if (this.inputUrl.includes("http")) {
+        let location = new URL(this.inputUrl);
+        return location.hostname;
+      } else if (this.inputUrl != "") {
+        return this.inputUrl;
+      } else {
+        this.inputUrl = this.placeholder;
+        return this.placeholder;
+      }
+    },
+  },
+  sockets: {
+    connect() {
+      console.log("socket connected");
+    },
+    customEmit(val) {
+      console.log(
+        'this method was fired by the socket server. eg: io.emit("customEmit", data)'
+      );
+    },
+    newHandles(data) {
+      // receive new handles
+
+      this.checked_accounts += data.length;
+      updateCounts();
+
+      addHandles(data);
+
+      if (Object.keys(accounts).length > 0) {
+        removeDuplicates();
+        checkDomains();
+        $("#infobox").css("visibility", "visible");
+        $("#download").css("display", "block");
+      }
+    },
+  },
+  methods: {
+    showTimeline: function () {
+      this.loaded = false;
+      if (this.inputUrl == "") this.inputUrl = this.placeholder;
+      this.toots = [];
+      this.updateLocation();
+      this.nextUrl =
+        "https://" +
+        this.instance +
+        "/api/v1/timelines/public?local=" +
+        this.local +
+        "&limit=40";
+      this.loadToots();
+    },
+  },
+  mounted: function () {
+    console.log(this.checked_accounts);
+  },
+});
 
 function removeDuplicates() {
   for (const [domain, data] of Object.entries(accounts)) {
@@ -152,7 +218,10 @@ function displayAccounts() {
       $ol = $("<ol></ol>");
       data["handles"].forEach((handle) => {
         $acc = $("<a>")
-          .attr("href", "https://" + domain + "/@" + handle.handle.split('@')[1])
+          .attr(
+            "href",
+            "https://" + domain + "/@" + handle.handle.split("@")[1]
+          )
           .text(handle["handle"])
           .addClass("link");
 
@@ -237,22 +306,6 @@ socket.on("userLists", function (lists) {
     '<input id="listSkipper" type="button" onClick="skipList()" value="Skip list">'
   );
   $("#choices").append($form);
-});
-
-socket.on("newHandles", function (data) {
-  // receive new handles
-
-  checked_accounts += data.length;
-  updateCounts();
-
-  addHandles(data);
-
-  if (Object.keys(accounts).length > 0) {
-    removeDuplicates();
-    checkDomains();
-    $("#infobox").css("visibility", "visible");
-    $("#download").css("display", "block");
-  }
 });
 
 socket.on("connect_error", (err) => handleErrors(err));
